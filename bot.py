@@ -25,6 +25,6 @@ subreddits = reddit.subreddit('IrishJewTesting')
 # getting the cute subreddits
 aww = reddit.subreddit('aww')
 
-for submission in subreddits.hot(limit = 5)
-
+for submission in subreddits.hot(limit = 5):
+    
 
