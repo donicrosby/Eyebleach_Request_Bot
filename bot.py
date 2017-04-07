@@ -1,7 +1,6 @@
 import praw
 import json
 import logging
-import time
 import random
 import threading
 
@@ -14,75 +13,78 @@ def inText(text, keywords):
         if word in text:
             return True
     return False
-
-def commentSearch(instance, subreddits, bleach, keywords):
-    for comment in subreddits.stream.comments():
-        normalized = comment.body.lower()
+    
+class postResponseWorkerThread(threading.Thread):
+    def __init__ (self, instance, bleach, submission):
+        threading.Thread.__init__(self, name = "responseWorker")
+        self.instance = instance
+        self.bleach = bleach
+        self.submission = submission
         
-        if(inText(normalized, keywords)):
-            try:
-                _thread.start_new_thread(postResponce, (reddit,bleach,comment))
-                
-            except(praw.exceptions.ClientExceptions):
-                logging.debug("ClientExeption")
+    def run(self):
+        template = "*beep* *boop*\n\nIt looks like you could use some eyebleach!\n\n[This Post](%s) from /u/%s in /r/%s might help\n\nI'm a bot and still learning please be gentle!\n\n^If ^you ^would ^like ^your ^subreddit ^removed ^or ^would ^like ^to ^make ^me ^better\n\n^please ^message ^/u/Irish_Jew"
 
-            except(praw.exceptions.APIException):
-                logging.debug("APIExeption")
+        randNumber = random.randint(1,100)
+        subNumber = 1
+        for subs in self.bleach.hot(limit=100):
+            if (subNumber == randNumber):
+                link = subs.shortlink
+                user = subs.author
+                sub = subs.subreddit
+                self.submission.reply(template %(link,user,sub))
+                break
+            subNumber += 1
         
-            except(praw.exceptions.PRAWExceptions):
-                logging.debug("PRAWExeption")
-
-            finally:
-                logging.debug("Responce Finsished")
-            
-def submissionSearch(instance, subreddits, bleach, keywords):
-    for submission in subreddits.stream.submissions():
-        title = submission.title.lower()
-        body = submission.body.lower()
-        
-        if (submission.link_flair_text.upper() == "NSFL"):
-            try:
-                _thread.start_new_thread(postResponce, (reddit,bleach,submission))
-            except(praw.exceptions.ClientExceptions):
-                logging.debug("ClientExeption")
-
-            except(praw.exceptions.APIException):
-                logging.debug("APIExeption")
-        
-            except(praw.exceptions.PRAWExceptions):
-                logging.debug("PRAWExeption")
-            finally:
-                logging.debug("Responce Finsished")
-            
-        elif(inText(title, keywords)):
-            try:
-                _thread.start_new_thread(postResponce, (reddit,bleach,submission))
-            finally:
-                logging.debug("Responce Finsished")
-             
-        elif(inText(body, keywords)):
-            try:
-                _thread.start_new_thread(postResponce, (reddit,bleach,submission))
-            finally:
-                logging.debug("Responce Finsished")
-        
-def postResponce(instance, bleach, submission):
-    template = "*beep* *boop*\n\nIt looks like you could use some eyebleach!\n\n[This Post](%s) from /u/%s in /r/%s might help\n\nI'm a bot and still learning please be gentle!\n\n^If ^you ^would ^like ^your ^subreddit ^removed ^or ^would ^like ^to ^make ^me ^better\n\n^please ^message ^/u/Irish_Jew"
-
-    randNumber = random.randint(1,100)
-    subNumber = 1
-    for subs in bleach.hot(limit=100):
-        if (subNumber == randNumber):
-            link = subs.shortlink
-            user = subs.author
-            sub = subs.subreddit
-            break
-    submission.reply(template %(link,user,sub))
-    logging.debug("Posting Response")
-    _thread.exit()
+        return 0
     
 class submissionSearchWorkerThread(threading.Thread):
-    def __init__ (self, instance, subreddits, bleach, keywords)
+    def __init__ (self, instance, subreddits, bleach, keywords):
+        threading.Thread.__init__(self, name = "submissionSearchWorker")
+        self.instance = instance
+        self.subreddits = subreddits
+        self.bleach = bleach
+        self.keywords = keywords
+        
+    def run(self):
+        for submission in self.subreddits.stream.submissions():
+            
+            title = submission.title.lower()
+            if not hasattr(submission, 'body'):
+                body = None
+            if ((submission.link_flair_text != None) and (submission.link_flair_text == "NSFL")):
+                logging.debug("Starting response thread")
+                responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
+                responseWorker.start()
+            else:
+                if(inText(title, self.keywords)):
+                    logging.debug("Starting response thread")
+                    responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
+                    responseWorker.start()
+                     
+                else:
+                    if(body != None):
+                        body = submission.body.lower()
+                        if (inText(body, self.keywords)):
+                            logging.debug("Starting response thread")
+                            responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
+                            responseWorker.start()
+                
+class commentSearchWorkerThread(threading.Thread):
+    def __init__ (self, instance, subreddits, bleach, keywords):
+        threading.Thread.__init__(self, name = "commentSearchWorker")
+        self.instance = instance
+        self.subreddits = subreddits
+        self.bleach = bleach
+        self.keywords = keywords
+        
+    def run(self):
+        for comment in self.subreddits.stream.comments():
+            normalized = comment.body.lower()
+            
+            if(inText(normalized, self.keywords)):
+                logging.debug("Starting response thread")
+                responseWorker = postResponseWorkerThread(self.instance, self.bleach, comment)
+                responseWorker.start()
     
 def main():
     # Opening the keys json file to read in sensitive script data
@@ -104,13 +106,19 @@ def main():
     logging.debug( "If this name: %s is equal to the bot's username then the authentication was successful", reddit.user.me())
 
     # Retreving subreddits for the bot to use
-    subreddits = reddit.subreddit('testingground4bots')
+    subreddits = reddit.subreddit('IrishJewTesting')
 
     # getting the cute subreddits
     bleach = reddit.multireddit(reddit.user.me(), 'eyebleach')
 
     #keywords to search through in submissions
     keywords = ['i need some eyebleach', 'eyebleach please', 'nsfw/l', 'nsfl']
+    
+    subSearchWorker = submissionSearchWorkerThread(reddit, subreddits, bleach, keywords)
+    comSearchWorker = commentSearchWorkerThread(reddit, subreddits, bleach, keywords)
+    
+    subSearchWorker.start()
+    comSearchWorker.start()
         
     
 
