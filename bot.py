@@ -51,23 +51,34 @@ class submissionSearchWorkerThread(threading.Thread):
             title = submission.title.lower()
             if not hasattr(submission, 'body'):
                 body = None
-            if ((submission.link_flair_text != None) and (submission.link_flair_text == "NSFL")):
-                logging.debug("Starting response thread")
-                responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
-                responseWorker.start()
+            if(self.haveIResponded(self.instance, submission)):
+                continue
             else:
-                if(inText(title, self.keywords)):
+                if ((submission.link_flair_text != None) and (submission.link_flair_text == "NSFL")):
                     logging.debug("Starting response thread")
                     responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
                     responseWorker.start()
-                     
                 else:
-                    if(body != None):
-                        body = submission.body.lower()
-                        if (inText(body, self.keywords)):
-                            logging.debug("Starting response thread")
-                            responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
-                            responseWorker.start()
+                    if(inText(title, self.keywords)):
+                        logging.debug("Starting response thread")
+                        responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
+                        responseWorker.start()
+                         
+                    else:
+                        if(body != None):
+                            body = submission.body.lower()
+                            if (inText(body, self.keywords)):
+                                logging.debug("Starting response thread")
+                                responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
+                                responseWorker.start()
+                            
+    def haveIResponded(self, instance, submission):
+        submission.comments.replace_more(limit=0)
+        for reply in submission.comments.list():
+            if(reply.author == instance.user.me()):
+                return True
+            elif(reply.parent() != submission):
+                return False
                 
 class commentSearchWorkerThread(threading.Thread):
     def __init__ (self, instance, subreddits, bleach, keywords):
@@ -82,9 +93,19 @@ class commentSearchWorkerThread(threading.Thread):
             normalized = comment.body.lower()
             
             if(inText(normalized, self.keywords)):
-                logging.debug("Starting response thread")
-                responseWorker = postResponseWorkerThread(self.instance, self.bleach, comment)
-                responseWorker.start()
+                if(not (self.haveIResponded(self.instance, comment))):
+                    logging.debug("Starting response thread")
+                    responseWorker = postResponseWorkerThread(self.instance, self.bleach, comment)
+                    responseWorker.start()
+    
+    def haveIResponded(self, instance, comment):
+        comment.refresh()
+        comment.replies.replace_more(limit=0)
+        for reply in comment.replies.list():
+            if(reply.author == instance.user.me()):
+                return True
+            elif(reply.parent() != comment):
+                return False
     
 def main():
     # Opening the keys json file to read in sensitive script data
