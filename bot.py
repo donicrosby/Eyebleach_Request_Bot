@@ -4,7 +4,7 @@ import logging
 import random
 import threading
 
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(filename='debug.log', filemode='w',level=logging.DEBUG,
                     format='[%(levelname)s] (%(threadName)-10s) %(message)s',
                     )
 
@@ -51,9 +51,7 @@ class submissionSearchWorkerThread(threading.Thread):
             title = submission.title.lower()
             if not hasattr(submission, 'body'):
                 body = None
-            if(self.haveIResponded(self.instance, submission)):
-                continue
-            else:
+            if((not self.haveIResponded(self.instance, submission)) and (not self.tooManyResponses(self.instance, submission, 3))):
                 if ((submission.link_flair_text != None) and (submission.link_flair_text == "NSFL")):
                     logging.debug("Starting response thread")
                     responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
@@ -79,6 +77,17 @@ class submissionSearchWorkerThread(threading.Thread):
                 return True
             elif(reply.parent() != submission):
                 return False
+            
+    def tooManyResponses(self,instance, submission, limit):
+        submission.comments.replace_more(limit=0)
+        responses = 0
+        for reply in submission.comments.list():
+            if(responses >= limit):
+                return True
+            else:
+                if(reply.author == instance.user.me()):
+                    responses += 1
+        return False    
                 
 class commentSearchWorkerThread(threading.Thread):
     def __init__ (self, instance, subreddits, bleach, keywords):
@@ -93,7 +102,7 @@ class commentSearchWorkerThread(threading.Thread):
             normalized = comment.body.lower()
             
             if(inText(normalized, self.keywords)):
-                if(not (self.haveIResponded(self.instance, comment))):
+                if((not (self.haveIResponded(self.instance, comment))) and (not self.tooManyResponses(self.instance, comment, 3))):
                     logging.debug("Starting response thread")
                     responseWorker = postResponseWorkerThread(self.instance, self.bleach, comment)
                     responseWorker.start()
@@ -106,6 +115,20 @@ class commentSearchWorkerThread(threading.Thread):
                 return True
             elif(reply.parent() != comment):
                 return False
+            
+    def tooManyResponses(self,instance, comment, limit):
+        comment.refresh()
+        parent = comment.parent()
+        parent.refresh()
+        parent.replies.replace_more(limit=0)
+        responses = 0
+        for reply in parent.replies.list():
+            if(responses >= limit):
+                return True
+            else:
+                if(reply.author == instance.user.me()):
+                    responses += 1            
+        return False
     
 def main():
     # Opening the keys json file to read in sensitive script data
@@ -127,7 +150,7 @@ def main():
     logging.debug( "If this name: %s is equal to the bot's username then the authentication was successful", reddit.user.me())
 
     # Retreving subreddits for the bot to use
-    subreddits = reddit.subreddit('IrishJewTesting')
+    subreddits = reddit.subreddit('IrishJewTesting+testingground4bots')
 
     # getting the cute subreddits
     bleach = reddit.multireddit(reddit.user.me(), 'eyebleach')
