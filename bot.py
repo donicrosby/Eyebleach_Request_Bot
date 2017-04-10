@@ -320,6 +320,9 @@ def main():
                 MAILSTOP = False
                 
             logging.info("Restarting Mail Monitor Thread")
+            mailStart = mailEnd
+            mailEnd = mailStart + 900
+            
             mailMonitor = mailMonitorWorkerThread(reddit, subreddits)
             mailMonitor.start()
             
