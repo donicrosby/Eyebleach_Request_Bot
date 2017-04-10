@@ -234,6 +234,13 @@ def refreshSubs(instance):
     print(finalSubs)
     filtered.close()
     return finalSubs, bleach
+
+def isModTime(minutemod):
+    now = datetime.datetime.now()
+    if((now.minute % minutemod) == 0):
+        return True
+    else:
+        return False
     
 def main():
     # Opening the keys json file to read in sensitive script data
@@ -279,14 +286,15 @@ def main():
     refreshEnd = refreshStart + 1800
     
     while(1):
-        if(time.time() >= mailEnd):
+        if(isModTime(15)):
             with shutdownLock:
                 global MAILSTOP
                 MAILSTOP = True
             while(mailMonitor.is_alive()):
                 mailMonitor.join(1)
-            mailStart = mailEnd  
-            mailEnd = mailStart + 900
+            
+            global MAILSTOP
+            MAILSTOP = False
             logging.info("Restarting Mail Monitor Thread")
             mailMonitor = mailMonitorWorkerThread(reddit, subreddits)
             mailMonitor.start()
@@ -312,6 +320,9 @@ def main():
             
             refreshStart = refreshEnd
             refreshEnd = refreshStart + 1800
+            
+            global ENDNOW
+            ENDNOW = False
             
             logging.info("Restarting Submission and Comment Threads")
             subSearchWorker.start()
