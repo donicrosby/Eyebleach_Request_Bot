@@ -57,10 +57,12 @@ class submissionSearchWorkerThread(threading.Thread):
         self.keywords = keywords
         
     def run(self):
+        logging.info("Submission Search Thread Starting")
         for submission in self.subreddits.stream.submissions():
             with shutdownLock:
                 global ENDNOW
                 if(ENDNOW):
+                    logging.info("Submission Search Thread Returning")
                     return 0
             title = submission.title.lower()
             
@@ -113,10 +115,12 @@ class commentSearchWorkerThread(threading.Thread):
         self.keywords = keywords
         
     def run(self):
+        logging.info("Comment Search Thread Starting")
         for comment in self.subreddits.stream.comments():
             with shutdownLock:
                 global ENDNOW
                 if(ENDNOW):
+                    logging.info("Comment Search Thread Returning")
                     return 0
             
             normalized = comment.body.lower()
