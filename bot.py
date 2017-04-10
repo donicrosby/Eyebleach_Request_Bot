@@ -7,9 +7,9 @@ import threading
 import time
 import datetime
 
-debugName = ("debug/debug%s.log" %(datetime.datetime.isoformat(datetime.datetime.now())))
+debugName = ("debug/info%s.log" %(datetime.datetime.isoformat(datetime.datetime.now())))
 
-logging.basicConfig(filename= debugName, filemode='w',level=logging.DEBUG,
+logging.basicConfig(filename= debugName, filemode='w',level=logging.INFO,
                     format='[%(levelname)s] (%(threadName)-10s) %(message)s',
                     )
 
