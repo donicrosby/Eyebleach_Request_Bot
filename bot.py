@@ -51,7 +51,7 @@ class submissionSearchWorkerThread(threading.Thread):
         
     def run(self):
         start = time.time()
-        end = start + 30
+        end = start + 3600
         for submission in self.subreddits.stream.submissions():
             title = submission.title.lower()
             
@@ -108,7 +108,7 @@ class commentSearchWorkerThread(threading.Thread):
         
     def run(self):
         start = time.time()
-        end = start + 30
+        end = start + 3600
         for comment in self.subreddits.stream.comments():
             normalized = comment.body.lower()
             
@@ -162,32 +162,37 @@ class mailMonitorWorkerThread(threading.Thread):
         self.subreddits = subreddits
         
     def run(self):
-        filter = open('filtersubreddits.txt', 'a')
-        for message in self.instance.inbox.unread(limit = None):
-            if(isinstance(message, Message)):
-                normalized = message.subject.lower()
-                if(normalized == 'remove subreddit'):
-                    author = message.author
-                    toremove = message.body.splitlines()
-                    for sub in toremove:
-                        if (sub == '\n'):
-                            continue
-                        sub = sub.replace("/r/", "")
-                        sub = sub.replace("r/", "")
-                        try:
-                            r = self.instance.subreddit(sub).subreddit_type
-                            logging.debug("The subreddit %s, is a %s subreddit" % (sub, r))
-                        except:
-                            logging.debug("The subreddit %s, is a private subreddit" % (sub))
-                            continue
-                        
-                        if(self.isMod(self.instance, author, sub)):
-                            filter.write("%s\n" %(sub))
-                            message.mark_read()
-                        else:
-                            message.mark_read()
-            else:
-                message.mark_read()
+        start = time.time()
+        end = start + 3600
+        with open('filtersubreddits.txt', 'a') as sublist:
+            for message in self.instance.inbox.unread(limit = None):
+                if(isinstance(message, Message)):
+                    normalized = message.subject.lower()
+                    if(normalized == 'remove subreddit'):
+                        author = message.author
+                        toremove = message.body.splitlines()
+                        for sub in toremove:
+                            if (sub == '\n'):
+                                continue
+                            sub = sub.replace("/r/", "")
+                            sub = sub.replace("r/", "")
+                            try:
+                                r = self.instance.subreddit(sub).subreddit_type
+                                logging.debug("The subreddit %s, is a %s subreddit" % (sub, r))
+                            except:
+                                logging.debug("The subreddit %s, is a private subreddit" % (sub))
+                                continue
+                            
+                            if(self.isMod(self.instance, author, sub)):
+                                sublist.write("%s\n" %(sub))
+                                message.mark_read()
+                            else:
+                                message.mark_read()
+                else:
+                    message.mark_read()
+                if(time.time() >= end):
+                    break
+        return 0
                 
     def isMod(self,instance, user, sub):
         for mod in instance.subreddit(sub).moderator():
@@ -241,7 +246,7 @@ def main():
     keywords = ['i need some eyebleach', 'eyebleach please', 'nsfw/l', 'nsfl']
     
     start = time.time()
-    end = start + 30 # making end time 30 seconds infront of start
+    end = start + 3600 # making end time 30 seconds infront of start
     subSearchWorker = submissionSearchWorkerThread(reddit, subreddits, bleach, keywords)
     comSearchWorker = commentSearchWorkerThread(reddit, subreddits, bleach, keywords)
     mailMonitor = mailMonitorWorkerThread(reddit, subreddits)
@@ -253,7 +258,6 @@ def main():
     
     while(1):
         if(time.time() >= end):
-            filtered.close()
             print("Ending")
             return 0
 
