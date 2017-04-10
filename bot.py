@@ -244,7 +244,7 @@ def main():
     end = start + 30 # making end time 30 seconds infront of start
     subSearchWorker = submissionSearchWorkerThread(reddit, subreddits, bleach, keywords)
     comSearchWorker = commentSearchWorkerThread(reddit, subreddits, bleach, keywords)
-    mailMonitor = mailMonitorWorkerThread(reddit, subreddits, filtered)
+    mailMonitor = mailMonitorWorkerThread(reddit, subreddits)
     
     logging.debug("Starting Bot at %s", time.asctime())
     subSearchWorker.start()
