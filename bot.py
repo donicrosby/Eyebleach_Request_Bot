@@ -122,7 +122,7 @@ class commentSearchWorkerThread(threading.Thread):
             normalized = comment.body.lower()
             
             if(inText(normalized, self.keywords)):
-                if((not (self.haveIResponded(self.instance, comment))) and (not self.tooManyResponses(self.instance, comment, 3))):
+                if((not (self.haveIResponded(self.instance, comment))) and (not self.tooManyResponses(self.instance, comment, 3)) and (not self.isAutoMod(self.instance, comment))):
                     logging.info("Starting response thread")
                     responseWorker = postResponseWorkerThread(self.instance, self.bleach, comment)
                     responseWorker.start()
@@ -159,6 +159,13 @@ class commentSearchWorkerThread(threading.Thread):
                     if(reply.author == instance.user.me()):
                         responses += 1         
         return False
+    
+    def isAutoMod(self, instance, comment):
+        if(comment.author == 'AutoModerator'):
+            logging.info("User is AutoModerator not replying")
+            return True
+        else:
+            return False
     
 class mailMonitorWorkerThread(threading.Thread):
     def __init__ (self, instance, subreddits):
