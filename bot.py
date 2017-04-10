@@ -15,9 +15,12 @@ logging.basicConfig(filename= debugName, filemode='w',level=logging.INFO,
 
 # flags to signal the program to end
 
-ENDNOW = False
 shutdownLock = threading.Lock()
+banLock = threading.Lock()
+ENDNOW = False
 MAILSTOP = False
+BANSTOP = False
+SCANSTOP = False
 
 def inText(text, keywords):
     for word in keywords:
@@ -60,8 +63,8 @@ class submissionSearchWorkerThread(threading.Thread):
         logging.info("Submission Search Thread Starting")
         for submission in self.subreddits.stream.submissions():
             with shutdownLock:
-                global ENDNOW
-                if(ENDNOW):
+                global ENDNOW, SCANSTOP
+                if(ENDNOW or SCANSTOP):
                     logging.info("Submission Search Thread Returning")
                     return 0
             title = submission.title.lower()
@@ -118,8 +121,8 @@ class commentSearchWorkerThread(threading.Thread):
         logging.info("Comment Search Thread Starting")
         for comment in self.subreddits.stream.comments():
             with shutdownLock:
-                global ENDNOW
-                if(ENDNOW):
+                global ENDNOW, SCANSTOP
+                if(ENDNOW or SCANSTOP):
                     logging.info("Comment Search Thread Returning")
                     return 0
             
@@ -202,10 +205,21 @@ class mailMonitorWorkerThread(threading.Thread):
                                 message.mark_read()
                             else:
                                 message.mark_read()
+                        
+                    elif((message.author == None) and (self.isBan(message))):
+                        sublist.write("%s\n" %(message.subreddit))
+                        print("Banned from %s" % (message.subreddit))
+                        logging.info("Banned from %s, Restarting" % (message.subreddit))
+                        with banLock:
+                            global BANSTOP
+                            BANSTOP = True
+                        message.mark_read()
+                        
                     else:
                         logging.info("Forwarding Message from %s" % (message.author))
                         botsubject = ("EyeBleachBot Message: From-/u/%s Subj-%s" % (message.author, message.subject))
                         self.instance.redditor("Irish_Jew").message(botsubject, message.body)
+                        message.mark_read()
                 else:
                     message.mark_read()
                     
@@ -221,6 +235,14 @@ class mailMonitorWorkerThread(threading.Thread):
             if(mod == user):
                 return True
         return False
+    
+    def isBan(self, message):
+        sub = message.subreddit
+        banmessage = ("You\'ve been banned from participating in r/%s" % (sub))
+        if(message.subject.lower() == banmessage.lower()):
+            return True
+        else:
+            return False
                 
 def refreshSubs(instance):
     basicSubs = ['all']
@@ -267,6 +289,9 @@ def main():
     
     global MAILSTOP
     global ENDNOW
+    global BANSTOP
+    global SCANSTOP
+    
     #start = time.time()
     #end = start + 10 # making end time 30 seconds infront of start
     subSearchWorker = submissionSearchWorkerThread(reddit, subreddits, bleach, keywords)
@@ -325,6 +350,35 @@ def main():
             logging.info("Restarting Submission and Comment Threads")
             subSearchWorker.start()
             comSearchWorker.start()
+            
+        with banLock:       
+            if(BANSTOP):
+                banStopTime = time.time()
+                banEndTime = banStopTime + 30
+                with shutdownLock:
+                    SCANSTOP = True
+                    
+                while(subSearchWorker.is_alive()):
+                    subSearchWorker.join(1)
+                while(comSearchWorker.is_alive()):
+                    comSearchWorker.join(1)
+                
+                BANSTOP = False
+                SCANSTOP = False
+                
+                while(time.time() < banEndTime):
+                    pass
+                
+                finalSubs, bleach = refreshSubs(reddit)
+                # Retreving subreddits for the bot to use
+                subreddits = reddit.subreddit(finalSubs)
+                
+                subSearchWorker = submissionSearchWorkerThread(reddit, subreddits, bleach, keywords)
+                comSearchWorker = commentSearchWorkerThread(reddit, subreddits, bleach, keywords)
+                
+                logging.info("Restarting Submission and Comment Threads after ban")
+                subSearchWorker.start()
+                comSearchWorker.start()
             
     print("Returning")
     return 0
