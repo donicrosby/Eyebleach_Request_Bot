@@ -12,6 +12,9 @@ logging.basicConfig(filename='debug.log', filemode='w',level=logging.DEBUG,
 
 # flags to signal the program to end
 
+ENDNOW = False
+shutdownLock = threading.Semaphore(4)
+
 def inText(text, keywords):
     for word in keywords:
         if word in text:
@@ -50,8 +53,6 @@ class submissionSearchWorkerThread(threading.Thread):
         self.keywords = keywords
         
     def run(self):
-        start = time.time()
-        end = start + 3600
         for submission in self.subreddits.stream.submissions():
             title = submission.title.lower()
             
@@ -75,8 +76,10 @@ class submissionSearchWorkerThread(threading.Thread):
                                 logging.debug("Starting response thread")
                                 responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
                                 responseWorker.start()
-            if(time.time() >= end):
-                break
+            with shutdownLock:
+                    if(ENDNOW):
+                        print("Submission Search Returning")
+                        break
         return 0
                             
     def haveIResponded(self, instance, submission):
@@ -107,8 +110,6 @@ class commentSearchWorkerThread(threading.Thread):
         self.keywords = keywords
         
     def run(self):
-        start = time.time()
-        end = start + 3600
         for comment in self.subreddits.stream.comments():
             normalized = comment.body.lower()
             
@@ -118,8 +119,10 @@ class commentSearchWorkerThread(threading.Thread):
                     responseWorker = postResponseWorkerThread(self.instance, self.bleach, comment)
                     responseWorker.start()
             
-            if(time.time() >= end):
-                break
+            with shutdownLock:
+                    if(ENDNOW):
+                        print("Comment Search Returning")
+                        break
         return 0
     
     def haveIResponded(self, instance, comment):
@@ -162,8 +165,6 @@ class mailMonitorWorkerThread(threading.Thread):
         self.subreddits = subreddits
         
     def run(self):
-        start = time.time()
-        end = start + 3600
         with open('filtersubreddits.txt', 'a') as sublist:
             for message in self.instance.inbox.unread(limit = None):
                 if(isinstance(message, Message)):
@@ -190,8 +191,12 @@ class mailMonitorWorkerThread(threading.Thread):
                                 message.mark_read()
                 else:
                     message.mark_read()
-                if(time.time() >= end):
-                    break
+                    
+                with shutdownLock:
+                    if(ENDNOW):
+                        print("Mail Monitor Returning")
+                        break
+                
         return 0
                 
     def isMod(self,instance, user, sub):
@@ -246,7 +251,7 @@ def main():
     keywords = ['i need some eyebleach', 'eyebleach please', 'nsfw/l', 'nsfl']
     
     start = time.time()
-    end = start + 3600 # making end time 30 seconds infront of start
+    end = start + 10 # making end time 30 seconds infront of start
     subSearchWorker = submissionSearchWorkerThread(reddit, subreddits, bleach, keywords)
     comSearchWorker = commentSearchWorkerThread(reddit, subreddits, bleach, keywords)
     mailMonitor = mailMonitorWorkerThread(reddit, subreddits)
@@ -258,6 +263,9 @@ def main():
     
     while(1):
         if(time.time() >= end):
+            shutdownLock.acquire()
+            ENDNOW = True
+            shutdownLock.release()
             print("Ending")
             return 0
 
