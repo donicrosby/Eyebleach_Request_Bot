@@ -234,13 +234,6 @@ def refreshSubs(instance):
     print(finalSubs)
     filtered.close()
     return finalSubs, bleach
-
-def isModTime(minutemod):
-    now = datetime.datetime.now()
-    if((now.minute % minutemod) == 0):
-        return True
-    else:
-        return False
     
 def main():
     # Opening the keys json file to read in sensitive script data
