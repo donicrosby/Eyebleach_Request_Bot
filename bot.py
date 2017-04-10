@@ -261,6 +261,8 @@ def main():
     #keywords to search through in submissions
     keywords = ['i need some eyebleach', 'eyebleach please', 'nsfw/l', 'nsfl']
     
+    global MAILSTOP
+    global ENDNOW
     #start = time.time()
     #end = start + 10 # making end time 30 seconds infront of start
     subSearchWorker = submissionSearchWorkerThread(reddit, subreddits, bleach, keywords)
@@ -281,12 +283,10 @@ def main():
     while(1):
         if(time.time() >= mailEnd):
             with shutdownLock:
-                global MAILSTOP
                 MAILSTOP = True
             while(mailMonitor.is_alive()):
                 mailMonitor.join(1)
-            
-            global MAILSTOP
+    
             if(MAILSTOP):
                 MAILSTOP = False
                 
@@ -296,7 +296,6 @@ def main():
             
         if(time.time() >= refreshEnd):
             with shutdownLock:
-                global ENDNOW
                 ENDNOW = True
                 logging.info("Shutting Down Submission and Comment Threads")
             
@@ -316,7 +315,6 @@ def main():
             refreshStart = refreshEnd
             refreshEnd = refreshStart + 1800
             
-            global ENDNOW
             if(ENDNOW):
                 ENDNOW = False
             
