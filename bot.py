@@ -286,7 +286,7 @@ def main():
     refreshEnd = refreshStart + 1800
     
     while(1):
-        if(isModTime(15)):
+        if(time.time() >= mailEnd):
             with shutdownLock:
                 global MAILSTOP
                 MAILSTOP = True
