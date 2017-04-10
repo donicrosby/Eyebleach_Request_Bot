@@ -10,7 +10,7 @@ import datetime
 debugName = ("debug/info%s.log" %(datetime.datetime.isoformat(datetime.datetime.now())))
 
 logging.basicConfig(filename= debugName, filemode='w',level=logging.INFO,
-                    format='[%(levelname)s] (%(threadName)-10s) %(message)s',
+                    format='%(asctime)s [%(levelname)s] (%(threadName)-10s) %(message)s',
                     )
 
 # flags to signal the program to end
