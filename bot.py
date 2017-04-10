@@ -218,7 +218,7 @@ def main():
 
     logging.debug( "If this name: %s is equal to the bot's username then the authentication was successful", reddit.user.me())
 
-    basicSubs = ['IrishJewTesting+testingground4bots']
+    basicSubs = ['all']
     minus = '-'
     
     # getting the cute subreddits
