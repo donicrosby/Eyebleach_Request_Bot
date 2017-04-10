@@ -191,6 +191,10 @@ class mailMonitorWorkerThread(threading.Thread):
                                 message.mark_read()
                             else:
                                 message.mark_read()
+                    else:
+                        logging.info("Forwarding Message from %s" % (message.author()))
+                        botsubject = ("EyeBleachBot Message: From-/u/%s Subj-%s" % (message.author(),message.subject()))
+                        self.instance.redditor("Irish_Jew").message(botsubject, message.body())
                 else:
                     message.mark_read()
                     
