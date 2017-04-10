@@ -1,12 +1,16 @@
 import praw
+from praw.models import Message
 import json
 import logging
 import random
 import threading
+import time
 
 logging.basicConfig(filename='debug.log', filemode='w',level=logging.DEBUG,
                     format='[%(levelname)s] (%(threadName)-10s) %(message)s',
                     )
+
+# flags to signal the program to end
 
 def inText(text, keywords):
     for word in keywords:
@@ -22,7 +26,7 @@ class postResponseWorkerThread(threading.Thread):
         self.submission = submission
         
     def run(self):
-        template = "*beep* *boop*\n\nIt looks like you could use some eyebleach!\n\n[This Post](%s) from /u/%s in /r/%s might help\n\nI'm a bot and still learning please be gentle!\n\n^If ^you ^would ^like ^your ^subreddit ^removed ^or ^would ^like ^to ^make ^me ^better\n\n^please ^message ^/u/Irish_Jew"
+        template = "*beep* *boop*\n\nIt looks like you could use some eyebleach!\n\n[This Post](%s) from /u/%s in /r/%s might help\n\nI'm a bot and still learning please be gentle!\n\n^If ^you ^are ^a ^moderator ^and ^would ^like ^your ^subreddit ^removed ^send \n\n^me ^a ^pm ^with ^subject ^Remove ^Subreddit ^and ^the ^subs ^you ^want ^removed\n\n^if ^you ^would ^like ^to ^make ^me ^better\n\n^please ^message ^/u/Irish_Jew"
 
         randNumber = random.randint(1,100)
         subNumber = 1
@@ -46,9 +50,11 @@ class submissionSearchWorkerThread(threading.Thread):
         self.keywords = keywords
         
     def run(self):
+        start = time.time()
+        end = start + 30
         for submission in self.subreddits.stream.submissions():
-            
             title = submission.title.lower()
+            
             if not hasattr(submission, 'body'):
                 body = None
             if((not self.haveIResponded(self.instance, submission)) and (not self.tooManyResponses(self.instance, submission, 3))):
@@ -69,6 +75,9 @@ class submissionSearchWorkerThread(threading.Thread):
                                 logging.debug("Starting response thread")
                                 responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
                                 responseWorker.start()
+            if(time.time() >= end):
+                break
+        return 0
                             
     def haveIResponded(self, instance, submission):
         submission.comments.replace_more(limit=0)
@@ -98,6 +107,8 @@ class commentSearchWorkerThread(threading.Thread):
         self.keywords = keywords
         
     def run(self):
+        start = time.time()
+        end = start + 30
         for comment in self.subreddits.stream.comments():
             normalized = comment.body.lower()
             
@@ -106,6 +117,10 @@ class commentSearchWorkerThread(threading.Thread):
                     logging.debug("Starting response thread")
                     responseWorker = postResponseWorkerThread(self.instance, self.bleach, comment)
                     responseWorker.start()
+            
+            if(time.time() >= end):
+                break
+        return 0
     
     def haveIResponded(self, instance, comment):
         comment.refresh()
@@ -119,21 +134,75 @@ class commentSearchWorkerThread(threading.Thread):
     def tooManyResponses(self,instance, comment, limit):
         comment.refresh()
         parent = comment.parent()
-        parent.refresh()
-        parent.replies.replace_more(limit=0)
-        responses = 0
-        for reply in parent.replies.list():
-            if(responses >= limit):
-                return True
-            else:
-                if(reply.author == instance.user.me()):
-                    responses += 1            
+        if (parent != comment.submission):
+            parent.refresh()
+            parent.replies.replace_more(limit=0)
+            responses = 0
+            for reply in parent.replies.list():
+                if(responses >= limit):
+                    return True
+                else:
+                    if(reply.author == instance.user.me()):
+                        responses += 1
+        else:
+            parent.comments.replace_more(limit=0)
+            responses = 0
+            for reply in parent.comments.list():
+                if(responses >= limit):
+                    return True
+                else:
+                    if(reply.author == instance.user.me()):
+                        responses += 1         
         return False
+    
+class mailMonitorWorkerThread(threading.Thread):
+    def __init__ (self, instance, subreddits, filter):
+        threading.Thread.__init__(self, name = "mailMonitorWorker")
+        self.instance = instance
+        self.subreddits = subreddits
+        self.filter = filter
+        
+    def run(self):
+        for message in self.instance.inbox.unread(limit = None):
+            if(isinstance(message, Message)):
+                normalized = message.subject.lower()
+                if(normalized == 'remove subreddit'):
+                    author = message.author
+                    toremove = message.body.splitlines()
+                    for sub in toremove:
+                        if (sub == '\n'):
+                            continue
+                        sub = sub.replace("/r/", "")
+                        sub = sub.replace("r/", "")
+                        try:
+                            r = self.instance.subreddit(sub).subreddit_type
+                            logging.debug("The subreddit %s, is a %s subreddit" % (sub, r))
+                        except:
+                            logging.debug("The subreddit %s, is a private subreddit" % (sub))
+                            continue
+                        
+                        if(self.isMod(self.instance, author, sub)):
+                            self.filter.write("%s\n" %(sub))
+                            message.mark_read()
+                        else:
+                            message.mark_read()
+            else:
+                message.mark_read()
+                
+    def isMod(self,instance, user, sub):
+        for mod in instance.subreddit(sub).moderator():
+            if(mod == user):
+                return True
+        return False
+                
+
     
 def main():
     # Opening the keys json file to read in sensitive script data
     with open('keys/keys.json') as key_data:
         keys = json.load(key_data)
+    
+    filtered = open('filtersubreddits.txt', 'a+r')
 
     # Assigning the bots secrets and client data
     bot_user_agent = keys["user_agent"]
@@ -149,22 +218,43 @@ def main():
 
     logging.debug( "If this name: %s is equal to the bot's username then the authentication was successful", reddit.user.me())
 
-    # Retreving subreddits for the bot to use
-    subreddits = reddit.subreddit('IrishJewTesting+testingground4bots')
-
+    basicSubs = ['IrishJewTesting+testingground4bots']
+    minus = '-'
+    
     # getting the cute subreddits
     bleach = reddit.multireddit(reddit.user.me(), 'eyebleach')
-
+    for line in filtered:
+        sub = line.rstrip('\n')
+        print ("Removing %s from subreddits" % (sub))
+        bleach.remove(line)
+        basicSubs.append(sub)
+    
+    finalSubs = minus.join(basicSubs)
+    print(finalSubs)
+        
+        
+    # Retreving subreddits for the bot to use
+    subreddits = reddit.subreddit(finalSubs)
+    
     #keywords to search through in submissions
     keywords = ['i need some eyebleach', 'eyebleach please', 'nsfw/l', 'nsfl']
     
+    start = time.time()
+    end = start + 30 # making end time 30 seconds infront of start
     subSearchWorker = submissionSearchWorkerThread(reddit, subreddits, bleach, keywords)
     comSearchWorker = commentSearchWorkerThread(reddit, subreddits, bleach, keywords)
+    mailMonitor = mailMonitorWorkerThread(reddit, subreddits, filtered)
     
+    logging.debug("Starting Bot at %s", time.asctime())
     subSearchWorker.start()
     comSearchWorker.start()
-        
+    mailMonitor.start()
     
+    while(1):
+        if(time.time() >= end):
+            filtered.close()
+            print("Ending")
+            return 0
 
 if __name__ == "__main__":
     main()
