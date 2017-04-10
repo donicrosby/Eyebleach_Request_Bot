@@ -13,7 +13,8 @@ logging.basicConfig(filename='debug.log', filemode='w',level=logging.DEBUG,
 # flags to signal the program to end
 
 ENDNOW = False
-shutdownLock = threading.Semaphore(4)
+shutdownLock = threading.Lock()
+MAILSTOP = False
 
 def inText(text, keywords):
     for word in keywords:
@@ -29,7 +30,7 @@ class postResponseWorkerThread(threading.Thread):
         self.submission = submission
         
     def run(self):
-        template = "*beep* *boop*\n\nIt looks like you could use some eyebleach!\n\n[This Post](%s) from /u/%s in /r/%s might help\n\nI'm a bot and still learning please be gentle!\n\n^If ^you ^are ^a ^moderator ^and ^would ^like ^your ^subreddit ^removed ^send \n\n^me ^a ^pm ^with ^subject ^Remove ^Subreddit ^and ^the ^subs ^you ^want ^removed\n\n^if ^you ^would ^like ^to ^make ^me ^better\n\n^please ^message ^/u/Irish_Jew"
+        template = "*beep* *boop*\n\nIt looks like you could use some eyebleach!\n\n[This Post](%s) from /u/%s in /r/%s might help\n\nI'm a bot and still learning please be gentle!\n\n^If ^you ^are ^a ^moderator ^and ^would ^like ^your ^subreddit ^removed ^send \n\n^me ^a ^pm ^with ^subject ^Remove ^Subreddit ^and ^the ^subs ^you ^want ^removed\n\n^if ^you ^would ^like ^to ^make ^me ^better\n\n^please ^message ^me ^with ^your ^suggestions"
 
         randNumber = random.randint(1,100)
         subNumber = 1
@@ -54,6 +55,10 @@ class submissionSearchWorkerThread(threading.Thread):
         
     def run(self):
         for submission in self.subreddits.stream.submissions():
+            with shutdownLock:
+                global ENDNOW
+                if(ENDNOW):
+                    return 0
             title = submission.title.lower()
             
             if not hasattr(submission, 'body'):
@@ -76,11 +81,6 @@ class submissionSearchWorkerThread(threading.Thread):
                                 logging.debug("Starting response thread")
                                 responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
                                 responseWorker.start()
-            with shutdownLock:
-                    if(ENDNOW):
-                        print("Submission Search Returning")
-                        break
-        return 0
                             
     def haveIResponded(self, instance, submission):
         submission.comments.replace_more(limit=0)
@@ -111,6 +111,11 @@ class commentSearchWorkerThread(threading.Thread):
         
     def run(self):
         for comment in self.subreddits.stream.comments():
+            with shutdownLock:
+                global ENDNOW
+                if(ENDNOW):
+                    return 0
+            
             normalized = comment.body.lower()
             
             if(inText(normalized, self.keywords)):
@@ -118,12 +123,6 @@ class commentSearchWorkerThread(threading.Thread):
                     logging.debug("Starting response thread")
                     responseWorker = postResponseWorkerThread(self.instance, self.bleach, comment)
                     responseWorker.start()
-            
-            with shutdownLock:
-                    if(ENDNOW):
-                        print("Comment Search Returning")
-                        break
-        return 0
     
     def haveIResponded(self, instance, comment):
         comment.refresh()
@@ -193,8 +192,8 @@ class mailMonitorWorkerThread(threading.Thread):
                     message.mark_read()
                     
                 with shutdownLock:
-                    if(ENDNOW):
-                        print("Mail Monitor Returning")
+                    global ENDNOW
+                    if(ENDNOW or MAILSTOP):
                         break
                 
         return 0
@@ -250,8 +249,8 @@ def main():
     #keywords to search through in submissions
     keywords = ['i need some eyebleach', 'eyebleach please', 'nsfw/l', 'nsfl']
     
-    start = time.time()
-    end = start + 10 # making end time 30 seconds infront of start
+    #start = time.time()
+    #end = start + 10 # making end time 30 seconds infront of start
     subSearchWorker = submissionSearchWorkerThread(reddit, subreddits, bleach, keywords)
     comSearchWorker = commentSearchWorkerThread(reddit, subreddits, bleach, keywords)
     mailMonitor = mailMonitorWorkerThread(reddit, subreddits)
@@ -261,13 +260,33 @@ def main():
     comSearchWorker.start()
     mailMonitor.start()
     
+    mailStart = time.time()
+    mailEnd = mailStart + 900
+    
     while(1):
-        if(time.time() >= end):
-            shutdownLock.acquire()
-            ENDNOW = True
-            shutdownLock.release()
-            print("Ending")
-            return 0
+        if(time.time() >= mailEnd):
+            with shutdownLock:
+                global MAILSTOP
+                MAILSTOP = True
+            while(mailMonitor.is_alive()):
+                mailMonitor.join(1)
+            mailStart = mailEnd  
+            mailEnd = mailStart + 900
+            logging.debug("Starting Mail Monitor Thread")
+            mailMonitor.start()
+#         if(time.time() >= end):
+#             with shutdownLock:
+#                 global ENDNOW
+#                 ENDNOW = True
+#             print("%r" % (ENDNOW))
+#             print("Ending")
+#             while(subSearchWorker.is_alive()):
+#                 subSearchWorker.join(1)
+#             while(comSearchWorker.is_alive()):
+#                 comSearchWorker.join(1)
+#             mailMonitor.join(10)
+    print("Returning")
+    return 0
 
 if __name__ == "__main__":
     main()
