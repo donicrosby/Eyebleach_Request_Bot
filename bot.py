@@ -287,7 +287,9 @@ def main():
                 mailMonitor.join(1)
             
             global MAILSTOP
-            MAILSTOP = False
+            if(MAILSTOP):
+                MAILSTOP = False
+                
             logging.info("Restarting Mail Monitor Thread")
             mailMonitor = mailMonitorWorkerThread(reddit, subreddits)
             mailMonitor.start()
@@ -315,7 +317,8 @@ def main():
             refreshEnd = refreshStart + 1800
             
             global ENDNOW
-            ENDNOW = False
+            if(ENDNOW):
+                ENDNOW = False
             
             logging.info("Restarting Submission and Comment Threads")
             subSearchWorker.start()
