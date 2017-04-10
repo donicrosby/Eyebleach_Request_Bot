@@ -156,13 +156,13 @@ class commentSearchWorkerThread(threading.Thread):
         return False
     
 class mailMonitorWorkerThread(threading.Thread):
-    def __init__ (self, instance, subreddits, filter):
+    def __init__ (self, instance, subreddits):
         threading.Thread.__init__(self, name = "mailMonitorWorker")
         self.instance = instance
         self.subreddits = subreddits
-        self.filter = filter
         
     def run(self):
+        filter = open('filtersubreddits.txt', 'a')
         for message in self.instance.inbox.unread(limit = None):
             if(isinstance(message, Message)):
                 normalized = message.subject.lower()
@@ -182,7 +182,7 @@ class mailMonitorWorkerThread(threading.Thread):
                             continue
                         
                         if(self.isMod(self.instance, author, sub)):
-                            self.filter.write("%s\n" %(sub))
+                            filter.write("%s\n" %(sub))
                             message.mark_read()
                         else:
                             message.mark_read()
@@ -202,7 +202,7 @@ def main():
     with open('keys/keys.json') as key_data:
         keys = json.load(key_data)
     
-    filtered = open('filtersubreddits.txt', 'a+r')
+    filtered = open('filtersubreddits.txt', 'r')
 
     # Assigning the bots secrets and client data
     bot_user_agent = keys["user_agent"]
@@ -231,6 +231,7 @@ def main():
     
     finalSubs = minus.join(basicSubs)
     print(finalSubs)
+    filtered.close()
         
         
     # Retreving subreddits for the bot to use
