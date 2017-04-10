@@ -211,14 +211,27 @@ class mailMonitorWorkerThread(threading.Thread):
                 return True
         return False
                 
-
+def refreshSubs(instance):
+    basicSubs = ['all']
+    minus = '-'
+    
+    # getting the cute subreddits
+    filtered = open('filtersubreddits.txt', 'r')
+    bleach = instance.multireddit(instance.user.me(), 'eyebleach')
+    for line in filtered:
+        sub = line.rstrip('\n')
+        bleach.remove(line)
+        basicSubs.append(sub)
+    
+    finalSubs = minus.join(basicSubs)
+    print(finalSubs)
+    filtered.close()
+    return finalSubs, bleach
     
 def main():
     # Opening the keys json file to read in sensitive script data
     with open('keys/keys.json') as key_data:
         keys = json.load(key_data)
-    
-    filtered = open('filtersubreddits.txt', 'r')
 
     # Assigning the bots secrets and client data
     bot_user_agent = keys["user_agent"]
@@ -233,22 +246,8 @@ def main():
                          username = "EyebleachRequest_Bot")
 
     logging.debug( "If this name: %s is equal to the bot's username then the authentication was successful", reddit.user.me())
-
-    basicSubs = ['all']
-    minus = '-'
-    
-    # getting the cute subreddits
-    bleach = reddit.multireddit(reddit.user.me(), 'eyebleach')
-    for line in filtered:
-        sub = line.rstrip('\n')
-        bleach.remove(line)
-        basicSubs.append(sub)
-    
-    finalSubs = minus.join(basicSubs)
-    print(finalSubs)
-    filtered.close()
         
-        
+    finalSubs, bleach = refreshSubs(reddit)
     # Retreving subreddits for the bot to use
     subreddits = reddit.subreddit(finalSubs)
     
@@ -269,6 +268,9 @@ def main():
     mailStart = time.time()
     mailEnd = mailStart + 900
     
+    refreshStart = time.time()
+    refreshEnd = refreshStart + 1800
+    
     while(1):
         if(time.time() >= mailEnd):
             with shutdownLock:
@@ -281,17 +283,30 @@ def main():
             logging.info("Restarting Mail Monitor Thread")
             mailMonitor = mailMonitorWorkerThread(reddit, subreddits)
             mailMonitor.start()
-#         if(time.time() >= end):
-#             with shutdownLock:
-#                 global ENDNOW
-#                 ENDNOW = True
-#             print("%r" % (ENDNOW))
-#             print("Ending")
-#             while(subSearchWorker.is_alive()):
-#                 subSearchWorker.join(1)
-#             while(comSearchWorker.is_alive()):
-#                 comSearchWorker.join(1)
-#             mailMonitor.join(10)
+            
+        if(time.time() >= refreshEnd):
+            with shutdownLock:
+                global ENDNOW
+                ENDNOW = True
+                logging.info("Shutting Down Submission and Comment Threads")
+            
+            #waiting for threads to terminate
+            while(subSearchWorker.is_alive()):
+                subSearchWorker.join(1)
+            while(comSearchWorker.is_alive()):
+                comSearchWorker.join(1)
+                
+            finalSubs, bleach = refreshSubs(reddit)
+            # Retreving subreddits for the bot to use
+            subreddits = reddit.subreddit(finalSubs)
+            
+            subSearchWorker = submissionSearchWorkerThread(reddit, subreddits, bleach, keywords)
+            comSearchWorker = commentSearchWorkerThread(reddit, subreddits, bleach, keywords)
+            
+            logging.info("Restarting Submission and Comment Threads")
+            subSearchWorker.start()
+            comSearchWorker.start()
+            
     print("Returning")
     return 0
 
