@@ -303,12 +303,12 @@ def main():
             subSearchWorker = submissionSearchWorkerThread(reddit, subreddits, bleach, keywords)
             comSearchWorker = commentSearchWorkerThread(reddit, subreddits, bleach, keywords)
             
+            refreshStart = refreshEnd
+            refreshEnd = refreshStart + 1800
+            
             logging.info("Restarting Submission and Comment Threads")
             subSearchWorker.start()
             comSearchWorker.start()
-            
-            refreshStart = refreshEnd
-            refreshEnd = refreshStart + 1800
             
     print("Returning")
     return 0
