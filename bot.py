@@ -5,8 +5,11 @@ import logging
 import random
 import threading
 import time
+import datetime
 
-logging.basicConfig(filename='debug.log', filemode='w',level=logging.DEBUG,
+debugName = ("debug/debug%s.log" %(datetime.datetime.isoformat(datetime.datetime.now())))
+
+logging.basicConfig(filename= debugName, filemode='w',level=logging.DEBUG,
                     format='[%(levelname)s] (%(threadName)-10s) %(message)s',
                     )
 
@@ -65,12 +68,12 @@ class submissionSearchWorkerThread(threading.Thread):
                 body = None
             if((not self.haveIResponded(self.instance, submission)) and (not self.tooManyResponses(self.instance, submission, 3))):
                 if ((submission.link_flair_text != None) and (submission.link_flair_text == "NSFL")):
-                    logging.debug("Starting response thread")
+                    logging.info("Starting response thread")
                     responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
                     responseWorker.start()
                 else:
                     if(inText(title, self.keywords)):
-                        logging.debug("Starting response thread")
+                        logging.info("Starting response thread")
                         responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
                         responseWorker.start()
                          
@@ -78,7 +81,7 @@ class submissionSearchWorkerThread(threading.Thread):
                         if(body != None):
                             body = submission.body.lower()
                             if (inText(body, self.keywords)):
-                                logging.debug("Starting response thread")
+                                logging.info("Starting response thread")
                                 responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
                                 responseWorker.start()
                             
@@ -120,7 +123,7 @@ class commentSearchWorkerThread(threading.Thread):
             
             if(inText(normalized, self.keywords)):
                 if((not (self.haveIResponded(self.instance, comment))) and (not self.tooManyResponses(self.instance, comment, 3))):
-                    logging.debug("Starting response thread")
+                    logging.info("Starting response thread")
                     responseWorker = postResponseWorkerThread(self.instance, self.bleach, comment)
                     responseWorker.start()
     
@@ -178,9 +181,9 @@ class mailMonitorWorkerThread(threading.Thread):
                             sub = sub.replace("r/", "")
                             try:
                                 r = self.instance.subreddit(sub).subreddit_type
-                                logging.debug("The subreddit %s, is a %s subreddit" % (sub, r))
+                                logging.info("The subreddit %s, is a %s subreddit" % (sub, r))
                             except:
-                                logging.debug("The subreddit %s, is a private subreddit" % (sub))
+                                logging.info("The subreddit %s, is a private subreddit" % (sub))
                                 continue
                             
                             if(self.isMod(self.instance, author, sub)):
@@ -234,7 +237,6 @@ def main():
     bleach = reddit.multireddit(reddit.user.me(), 'eyebleach')
     for line in filtered:
         sub = line.rstrip('\n')
-        print ("Removing %s from subreddits" % (sub))
         bleach.remove(line)
         basicSubs.append(sub)
     
@@ -255,7 +257,7 @@ def main():
     comSearchWorker = commentSearchWorkerThread(reddit, subreddits, bleach, keywords)
     mailMonitor = mailMonitorWorkerThread(reddit, subreddits)
     
-    logging.debug("Starting Bot at %s", time.asctime())
+    logging.info("Starting Bot at %s", time.asctime())
     subSearchWorker.start()
     comSearchWorker.start()
     mailMonitor.start()
@@ -272,7 +274,8 @@ def main():
                 mailMonitor.join(1)
             mailStart = mailEnd  
             mailEnd = mailStart + 900
-            logging.debug("Starting Mail Monitor Thread")
+            logging.info("Restarting Mail Monitor Thread")
+            mailMonitor = mailMonitorWorkerThread(reddit, subreddits)
             mailMonitor.start()
 #         if(time.time() >= end):
 #             with shutdownLock:

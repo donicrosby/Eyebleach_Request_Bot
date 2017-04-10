@@ -130,3 +130,5 @@ ENV/
 
 # Private keys folder
 keys/
+/log.out
+/log.txt
