@@ -307,6 +307,9 @@ def main():
             subSearchWorker.start()
             comSearchWorker.start()
             
+            refreshStart = refreshEnd
+            refreshEnd = refreshStart + 1800
+            
     print("Returning")
     return 0
 
