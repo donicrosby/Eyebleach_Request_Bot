@@ -71,7 +71,7 @@ class submissionSearchWorkerThread(threading.Thread):
             
             if not hasattr(submission, 'body'):
                 body = None
-            if((not self.haveIResponded(self.instance, submission)) and (not self.tooManyResponses(self.instance, submission, 3))):
+            if((not self.haveIResponded(self.instance, submission)) and (not self.tooManyResponses(self.instance, submission, 3)) and (not self.isRestricted(self.instance, submission))):
                 if ((submission.link_flair_text != None) and (submission.link_flair_text == "NSFL")):
                     logging.info("Starting response thread")
                     responseWorker = postResponseWorkerThread(self.instance, self.bleach, submission)
@@ -107,7 +107,14 @@ class submissionSearchWorkerThread(threading.Thread):
             else:
                 if(reply.author == instance.user.me()):
                     responses += 1
-        return False    
+        return False
+    
+    def isRestricted(self, instance, submission):
+        if(submission.subreddit.subreddit_type == 'restricted'):
+            logging.info("Subreddit %s, is restrictited ignoring" % (submission.subreddit))
+            return True
+        else:
+            return False    
                 
 class commentSearchWorkerThread(threading.Thread):
     def __init__ (self, instance, subreddits, bleach, keywords):
@@ -125,11 +132,11 @@ class commentSearchWorkerThread(threading.Thread):
                 if(ENDNOW or SCANSTOP):
                     logging.info("Comment Search Thread Returning")
                     return 0
-            
+                
             normalized = comment.body.lower()
             
             if(inText(normalized, self.keywords)):
-                if((not (self.haveIResponded(self.instance, comment))) and (not self.tooManyResponses(self.instance, comment, 3)) and (not self.isAutoMod(self.instance, comment))):
+                if((not (self.haveIResponded(self.instance, comment))) and (not self.tooManyResponses(self.instance, comment, 3)) and (not self.isAutoMod(self.instance, comment)) and (not self.isRestricted(self.instance, comment))):
                     logging.info("Starting response thread")
                     responseWorker = postResponseWorkerThread(self.instance, self.bleach, comment)
                     responseWorker.start()
@@ -170,6 +177,13 @@ class commentSearchWorkerThread(threading.Thread):
     def isAutoMod(self, instance, comment):
         if(comment.author == 'AutoModerator'):
             logging.info("User is AutoModerator not replying")
+            return True
+        else:
+            return False
+        
+    def isRestricted(self, instance, comment):
+        if(comment.subreddit.subreddit_type == 'restricted'):
+            logging.info("Subreddit %s, is restrictited ignoring" % (comment.subreddit))
             return True
         else:
             return False
@@ -292,8 +306,7 @@ def main():
     global BANSTOP
     global SCANSTOP
     
-    #start = time.time()
-    #end = start + 10 # making end time 30 seconds infront of start
+    
     subSearchWorker = submissionSearchWorkerThread(reddit, subreddits, bleach, keywords)
     comSearchWorker = commentSearchWorkerThread(reddit, subreddits, bleach, keywords)
     mailMonitor = mailMonitorWorkerThread(reddit, subreddits)
