@@ -6,6 +6,7 @@ import random
 import threading
 import time
 import datetime
+import re
 
 debugName = ("debug/info%s.log" %(datetime.datetime.isoformat(datetime.datetime.now())))
 
@@ -23,9 +24,12 @@ BANSTOP = False
 SCANSTOP = False
 
 def inText(text, keywords):
-    for word in keywords:
-        if word in text:
-            return True
+    re.IGNORECASE
+    linkEx = "((http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)"
+    re.sub(linkEx, "LINK", text)
+    matches = re.search(keywords, text)
+    if(matches != None):
+        return True
     return False
     
 class postResponseWorkerThread(threading.Thread):
@@ -36,20 +40,26 @@ class postResponseWorkerThread(threading.Thread):
         self.submission = submission
         
     def run(self):
-        template = "*beep* *boop*\n\nIt looks like you could use some eyebleach!\n\n[This Post](%s) from /u/%s in /r/%s might help\n\nI'm a bot and still learning please be gentle!\n\n^If ^you ^are ^a ^moderator ^and ^would ^like ^your ^subreddit ^removed ^send \n\n^me ^a ^pm ^with ^subject ^Remove ^Subreddit ^and ^the ^subs ^you ^want ^removed\n\n^if ^you ^would ^like ^to ^make ^me ^better\n\n^please ^message ^me ^with ^your ^suggestions"
-
+        # Add this when the other thread is going
+        #  ^^| [^^Opt-out](https://www.reddit.com/r/EyebleachRequestBot/comments/6c1fn7/blacklist/)
+        template = "It looks like you could use some eyebleach!\n\n[This Post](%s) in /r/%s might help\n\n----\n^^*Beep* ^^*boop* ^^I'm ^^a ^^bot, ^^please ^^be ^^gentle ^^| [^^Send ^^me ^^a ^^pm](https://www.reddit.com/message/compose/?to=EyebleachRequest_Bot) ^^| [^^About](https://np.reddit.com/r/eyebleachrequestbot/)"
         randNumber = random.randint(1,100)
         subNumber = 1
-        for subs in self.bleach.hot(limit=100):
+        for post in self.bleach.hot(limit=100):
             if (subNumber == randNumber):
-                link = subs.shortlink
-                user = subs.author
-                sub = subs.subreddit
-                self.submission.reply(template %(link,user,sub))
+                link = self.noParticipationLink(post)
+                #user = post.author
+                sub = post.subreddit
+                self.submission.reply(template %(link,sub))
                 break
             subNumber += 1
         
         return 0
+    
+    def noParticipationLink(self, submission):
+        linkid = submission.id_from_url(submission.shortlink)
+        npLink = ("np.reddit.com/%s" % (linkid))
+        return npLink
     
 class submissionSearchWorkerThread(threading.Thread):
     def __init__ (self, instance, subreddits, bleach, keywords):
@@ -222,7 +232,7 @@ class mailMonitorWorkerThread(threading.Thread):
                         
                     elif((message.author == None) and (self.isBan(message))):
                         sublist.write("%s\n" %(message.subreddit))
-                        print("Banned from %s" % (message.subreddit))
+                        print("Banned from %s, restarting" % (message.subreddit))
                         logging.info("Banned from %s, Restarting" % (message.subreddit))
                         with banLock:
                             global BANSTOP
@@ -299,7 +309,7 @@ def main():
     subreddits = reddit.subreddit(finalSubs)
     
     #keywords to search through in submissions
-    keywords = ['i need some eyebleach', 'eyebleach please', 'nsfw/l', 'nsfl']
+    keywords = ['\bi need some eyebleach', '\beyebleach please', '\bnsfw/l', '\bnsfl']
     
     global MAILSTOP
     global ENDNOW
