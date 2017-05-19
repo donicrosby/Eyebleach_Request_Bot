@@ -24,8 +24,8 @@ BANSTOP = False
 SCANSTOP = False
 
 def inText(text, keywords):
-    output = re.sub(r'((http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*))', 'LINK', text)  
-    matches = keywords.search(output)
+    output = keywords[0].sub('LINK', text)  
+    matches = keywords[1].search(output)
     if(matches != None):
         return True
     return False
@@ -309,9 +309,13 @@ def main():
     
     #keywords to search through in submissions
     phrases = ['i need some eyebleach', 'eyebleach please', 'nsfw/l', 'nsfl']
+    keywords = []
+    http = re.compile(r'((http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*))', re.I)
+    keywords.append(http)
     orEx = '|'
     joinedPhrases = orEx.join(phrases)
-    keywords = re.compile(r'\b(' + joinedPhrases + ')', re.I)
+    phrase = re.compile(r'\b(' + joinedPhrases + ')', re.I)
+    keywords.append(phrase)
     
     global MAILSTOP
     global ENDNOW
