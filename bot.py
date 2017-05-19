@@ -27,9 +27,10 @@ def inText(text, keywords):
     re.IGNORECASE
     linkEx = "((http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)"
     re.sub(linkEx, "LINK", text)
-    matches = re.search(keywords, text)
-    if(matches != None):
-        return True
+    for word in keywords:    
+        matches = re.search(word, text)
+        if(matches != None):
+            return True
     return False
     
 class postResponseWorkerThread(threading.Thread):
@@ -306,7 +307,8 @@ def main():
         
     finalSubs, bleach = refreshSubs(reddit)
     # Retreving subreddits for the bot to use
-    subreddits = reddit.subreddit(finalSubs)
+    #subreddits = reddit.subreddit(finalSubs)
+    subreddits = reddit.subreddit('irishjewtesting')
     
     #keywords to search through in submissions
     keywords = ['\bi need some eyebleach', '\beyebleach please', '\bnsfw/l', '\bnsfl']
