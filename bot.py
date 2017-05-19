@@ -24,13 +24,10 @@ BANSTOP = False
 SCANSTOP = False
 
 def inText(text, keywords):
-    re.IGNORECASE
-    linkEx = "((http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)"
-    re.sub(linkEx, "LINK", text)
-    for word in keywords:    
-        matches = re.search(word, text)
-        if(matches != None):
-            return True
+    output = re.sub(r'((http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*))', 'LINK', text)  
+    matches = keywords.search(output)
+    if(matches != None):
+        return True
     return False
     
 class postResponseWorkerThread(threading.Thread):
@@ -59,7 +56,7 @@ class postResponseWorkerThread(threading.Thread):
     
     def noParticipationLink(self, submission):
         linkid = submission.id_from_url(submission.shortlink)
-        npLink = ("np.reddit.com/%s" % (linkid))
+        npLink = ("https://np.reddit.com/%s" % (linkid))
         return npLink
     
 class submissionSearchWorkerThread(threading.Thread):
@@ -307,11 +304,14 @@ def main():
         
     finalSubs, bleach = refreshSubs(reddit)
     # Retreving subreddits for the bot to use
-    #subreddits = reddit.subreddit(finalSubs)
-    subreddits = reddit.subreddit('irishjewtesting')
+    subreddits = reddit.subreddit(finalSubs)
+    #subreddits = reddit.subreddit('irishjewtesting')
     
     #keywords to search through in submissions
-    keywords = ['\bi need some eyebleach', '\beyebleach please', '\bnsfw/l', '\bnsfl']
+    phrases = ['i need some eyebleach', 'eyebleach please', 'nsfw/l', 'nsfl']
+    orEx = '|'
+    joinedPhrases = orEx.join(phrases)
+    keywords = re.compile(r'\b(' + joinedPhrases + ')', re.I)
     
     global MAILSTOP
     global ENDNOW
